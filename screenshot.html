@@ -1,0 +1,445 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI小助理</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body,
+        html {
+            margin: 0;
+            padding: 0;
+            width: 100%;
+            height: 100%;
+            overflow: hidden;
+            font-family: 'Microsoft YaHei', Arial, sans-serif;
+            background: #000;
+        }
+
+        #videoFeed {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100vw;
+            height: 100vh;
+            object-fit: cover;
+            z-index: 1;
+        }
+
+        .top-right-controls {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            display: flex;
+            gap: 15px;
+            z-index: 10;
+        }
+
+        .status-panel {
+            position: fixed;
+            bottom: 20px;
+            left: 20px;
+            width: 240px;
+            background: rgba(255, 255, 255, 0.8);
+            backdrop-filter: blur(10px);
+            border-radius: 15px;
+            padding: 8px;
+            z-index: 10;
+        }
+
+        .status-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin: 2px;
+        }
+
+        .status-label {
+            font-weight: bold;
+            color: #333;
+            font-size: 0.95em;
+        }
+
+        .status-value {
+            color: #667eea;
+            font-size: 0.95em;
+            font-weight: 600;
+        }
+
+        .state-badge {
+            padding: 5px 12px;
+            border-radius: 15px;
+            font-weight: bold;
+            font-size: 0.85em;
+        }
+
+        .state-idle {
+            background: #e0e0e0;
+            color: #666;
+        }
+
+        .state-detecting {
+            background: #fff3cd;
+            color: #856404;
+        }
+
+        .state-framing {
+            background: #d1ecf1;
+            color: #0c5460;
+        }
+
+        .state-waiting_capture {
+            background: #f8d7da;
+            color: #721c24;
+        }
+
+        .state-captured {
+            background: #d4edda;
+            color: #155724;
+        }
+
+        .btn {
+            padding: 12px 20px;
+            font-size: 1em;
+            font-weight: bold;
+            border: none;
+            border-radius: 10px;
+            cursor: pointer;
+            transition: all 0.3s;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 15px rgba(0, 0, 0, 0.3);
+        }
+
+        .settings-wrapper {
+            position: relative;
+        }
+
+        .btn-settings {
+            background: rgba(255, 255, 255, 0.85);
+            color: #333;
+        }
+
+        .settings-menu {
+            display: none;
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background: rgba(255, 255, 255, 0.95);
+            backdrop-filter: blur(15px);
+            border-radius: 20px;
+            padding: 20px;
+            box-shadow: 0 15px 50px rgba(0, 0, 0, 0.5);
+            width: 240px;
+            flex-direction: column;
+            z-index: 20;
+        }
+
+        .settings-menu.show {
+            display: flex;
+        }
+
+        .menu-item {
+            padding: 12px 15px;
+            text-align: left;
+            background: transparent;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 0.95em;
+            color: #333;
+            transition: all 0.2s;
+            white-space: nowrap;
+        }
+
+        .menu-item:hover {
+            background: rgba(102, 126, 234, 0.1);
+            color: #667eea;
+        }
+
+        .settings-header {
+            font-size: 1.1em;
+            font-weight: bold;
+            color: #333;
+            margin-bottom: 15px;
+            text-align: center;
+            border-bottom: 1px solid #eee;
+            padding-bottom: 10px;
+        }
+
+        .app-info-section {
+            margin-top: 15px;
+            padding-top: 15px;
+            border-top: 1px solid #eee;
+            text-align: center;
+            font-size: 0.85em;
+            color: #777;
+        }
+
+        .app-link {
+            color: #667eea;
+            text-decoration: none;
+            font-weight: 600;
+            display: block;
+            margin-top: 5px;
+        }
+
+        /* Prompt Panel Styles */
+        .prompt-panel {
+            position: fixed;
+            bottom: 20px;
+            right: 20px;
+            width: 180px;
+            background: rgba(255, 255, 255, 0.85);
+            backdrop-filter: blur(10px);
+            border-radius: 15px;
+            padding: 15px;
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+            z-index: 10;
+        }
+
+        .prompt-panel h3 {
+            font-size: 0.9em;
+            color: #333;
+            margin-bottom: 10px;
+            text-align: center;
+        }
+
+        .prompt-item {
+            padding: 10px;
+            margin-bottom: 8px;
+            background: rgba(255, 255, 255, 0.5);
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 0.85em;
+            transition: all 0.2s;
+            text-align: center;
+            border: 2px solid transparent;
+        }
+
+        .prompt-item.active {
+            background: #667eea;
+            color: white;
+            border-color: #4facfe;
+        }
+    </style>
+</head>
+
+<body>
+    <img id="videoFeed" src="/video_feed" alt="视频流">
+
+    <div class="top-right-controls">
+        <div class="settings-wrapper">
+            <button class="btn btn-settings" onclick="toggleSettings()">⚙️ 设置</button>
+            <div id="settingsMenu" class="settings-menu">
+                <div class="settings-header">系统设置</div>
+                <button class="menu-item" onclick="toggleRotate()">旋转画面</button>
+                <button class="menu-item" onclick="toggleMirror()">镜像画面</button>
+
+                <div class="app-info-section">
+                    <a id="appTitleLink" href="#" target="_blank" style="text-decoration: none; color: inherit;">
+                        <div id="appName" style="font-weight: bold; color: #333; margin-bottom: 5px;">加载中...</div>
+                    </a>
+                    <div id="appVersion">版本: 加载中...</div>
+                    <a id="appCopyright" href="#" target="_blank" class="app-link">版权信息</a>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="prompt-panel">
+        <h3>💡 AI任务</h3>
+        <div id="promptList"></div>
+    </div>
+
+    <div class="status-panel">
+        <div class="status-item">
+            <span class="status-label">当前状态:</span>
+            <span id="currentState" class="state-badge state-idle">IDLE</span>
+        </div>
+        <div class="status-item">
+            <span class="status-label">截图状态:</span>
+            <span id="screenshotStatus" class="status-value">等待开始</span>
+        </div>
+    </div>
+
+    <script>
+        // 视频流刷新优化
+        let lastUpdateTime = 0;
+        const UPDATE_INTERVAL = 200; // 降低到200ms,减少请求频率
+
+        function refreshVideoFeed() {
+            const now = Date.now();
+            if (now - lastUpdateTime < UPDATE_INTERVAL) {
+                return; // 跳过过于频繁的刷新
+            }
+            lastUpdateTime = now;
+
+            const img = document.getElementById('videoFeed');
+            const newSrc = '/video_feed?t=' + now;
+
+            // 预加载图像,避免闪烁
+            const tempImg = new Image();
+            tempImg.onload = function () {
+                img.src = newSrc;
+            };
+            tempImg.onerror = function () {
+                console.warn('Failed to load video feed');
+            };
+            tempImg.src = newSrc;
+        }
+
+        // 使用requestAnimationFrame优化刷新
+        function animateVideoFeed() {
+            refreshVideoFeed();
+            requestAnimationFrame(animateVideoFeed);
+        }
+        animateVideoFeed();
+
+        // 定期更新状态
+        setInterval(updateStatus, 500);
+
+        async function updateStatus() {
+            try {
+                const response = await fetch('/screenshot_status');
+                const data = await response.json();
+
+                // 更新状态显示
+                const stateElement = document.getElementById('currentState');
+                stateElement.textContent = data.state.toUpperCase();
+                stateElement.className = 'state-badge state-' + data.state;
+
+                // 更新截图状态文本
+                const statusElement = document.getElementById('screenshotStatus');
+                if (data.has_screenshot) {
+                    statusElement.textContent = '截图已完成 ✓';
+                    statusElement.style.color = '#28a745';
+                } else {
+                    const statusTexts = {
+                        'idle': '等待开始',
+                        'detecting': '检测中,请保持静止...',
+                        'framing': '框定区域中...',
+                        'waiting_capture': '准备截图...',
+                        'captured': '截图完成!'
+                    };
+                    statusElement.textContent = statusTexts[data.state] || '未知状态';
+                    statusElement.style.color = '#667eea';
+                }
+
+                // 如果截图完成,自动跳转
+                if (data.state === 'captured' && data.has_screenshot) {
+                    setTimeout(() => {
+                        window.location.href = '/screenshot_result.html';
+                    }, 2000);
+                }
+            } catch (error) {
+                console.error('获取状态失败:', error);
+            }
+        }
+
+        function toggleSettings() {
+            const menu = document.getElementById('settingsMenu');
+            menu.classList.toggle('show');
+        }
+
+        // 点击弹窗外部关闭
+        window.addEventListener('click', function (event) {
+            const settingsMenu = document.getElementById('settingsMenu');
+            const settingsBtn = document.querySelector('.btn-settings');
+
+            if (settingsMenu && settingsBtn && !settingsBtn.contains(event.target) && !settingsMenu.contains(event.target)) {
+                settingsMenu.classList.remove('show');
+            }
+        });
+
+        async function toggleRotate() {
+            try {
+                const response = await fetch('/toggle_rotate', { method: 'POST' });
+                if (!response.ok) alert('旋转失败');
+            } catch (error) {
+                console.error('旋转失败:', error);
+            }
+        }
+
+        async function toggleMirror() {
+            try {
+                const response = await fetch('/toggle_mirror', { method: 'POST' });
+                if (!response.ok) alert('镜像失败');
+            } catch (error) {
+                console.error('镜像失败:', error);
+            }
+        }
+
+        async function loadPrompts() {
+            try {
+                const response = await fetch('/get_prompts');
+                const prompts = await response.json();
+                const listContainer = document.getElementById('promptList');
+
+                prompts.forEach((prompt, index) => {
+                    const div = document.createElement('div');
+                    div.className = 'prompt-item' + (index === 0 ? ' active' : '');
+                    div.textContent = prompt.title;
+                    div.onclick = () => selectPrompt(prompt, div);
+                    listContainer.appendChild(div);
+
+                    // 默认选中第一个
+                    if (index === 0) selectPrompt(prompt, div);
+                });
+            } catch (error) {
+                console.error('加载提示词失败:', error);
+            }
+        }
+
+        async function selectPrompt(prompt, element) {
+            try {
+                await fetch('/select_prompt', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ content: prompt.content })
+                });
+
+                document.querySelectorAll('.prompt-item').forEach(el => el.classList.remove('active'));
+                element.classList.add('active');
+            } catch (error) {
+                console.error('切换提示词失败:', error);
+            }
+        }
+
+        async function loadAppInfo() {
+            try {
+                const response = await fetch('/app_info');
+                const data = await response.json();
+                document.getElementById('appName').textContent = data.name;
+                document.getElementById('appVersion').textContent = '版本: v' + data.version;
+                const copyrightLink = document.getElementById('appCopyright');
+                copyrightLink.textContent = data.copyright;
+                copyrightLink.href = data.url;
+                document.getElementById('appTitleLink').href = data.url;
+            } catch (error) {
+                console.error('加载应用信息失败:', error);
+            }
+        }
+
+        // 初始化时更新一次状态
+        updateStatus();
+        loadPrompts();
+        loadAppInfo();
+    </script>
+</body>
+
+</html>
