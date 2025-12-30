@@ -73,8 +73,8 @@ selected_prompt_text = "请描述这张图片中的内容。"
 PROMPTS_FILE = "prompts.json"
 
 # 应用元数据配置
-APP_NAME = "一顿框系统 © 2026"
-APP_VERSION = "1.0.3-优化版"
+APP_NAME = "一框框系统 © 2026"
+APP_VERSION = "1.1.3"
 APP_COPYRIGHT = "作者:禾禾椰"
 PROJECT_URL = "https://www.douyin.com/user/MS4wLjABAAAAOyqvejBV5f3GmXNbmeCmkCRQJ84Lcluy1uMeWwKa7o0"
 
