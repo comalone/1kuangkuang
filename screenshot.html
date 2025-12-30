@@ -268,6 +268,10 @@
 
     <div class="status-panel">
         <div class="status-item">
+            <span class="status-label">实时帧率:</span>
+            <span id="fpsDisplay" class="status-value">-- FPS</span>
+        </div>
+        <div class="status-item">
             <span class="status-label">当前状态:</span>
             <span id="currentState" class="state-badge state-idle">IDLE</span>
         </div>
@@ -345,6 +349,27 @@
                     setTimeout(() => {
                         window.location.href = '/screenshot_result.html';
                     }, 2000);
+                }
+
+                // 获取并显示帧率
+                try {
+                    const perfResponse = await fetch('/performance_stats');
+                    const perfData = await perfResponse.json();
+                    const fpsElement = document.getElementById('fpsDisplay');
+                    if (perfData.fps !== undefined) {
+                        fpsElement.textContent = `${perfData.fps} FPS`;
+                        // 根据帧率设置颜色
+                        if (perfData.fps >= 25) {
+                            fpsElement.style.color = '#28a745'; // 绿色
+                        } else if (perfData.fps >= 15) {
+                            fpsElement.style.color = '#ffc107'; // 黄色
+                        } else {
+                            fpsElement.style.color = '#dc3545'; // 红色
+                        }
+                    }
+                } catch (err) {
+                    // 如果性能统计接口不可用,显示 N/A
+                    document.getElementById('fpsDisplay').textContent = 'N/A';
                 }
             } catch (error) {
                 console.error('获取状态失败:', error);
