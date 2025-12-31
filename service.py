@@ -14,7 +14,7 @@ import cv2 as cv
 import numpy as np
 import mediapipe as mp
 import time
-from collections import deque
+from collections import deque, Counter
 import threading
 import queue
 import requests
@@ -64,6 +64,7 @@ current_frame_for_screenshot = None
 last_screenshot_path = None
 current_gesture = "no hand"
 current_gesture_lock = threading.Lock()
+gesture_history = deque(maxlen=8)  # 时序滤波缓冲区
 
 # AI 分析相关
 api_key = os.getenv("DASHSCOPE_API_KEY")
@@ -74,7 +75,7 @@ PROMPTS_FILE = "prompts.json"
 
 # 应用元数据配置
 APP_NAME = "一框框系统 © 2026"
-APP_VERSION = "1.1.3"
+APP_VERSION = "1.2.0"
 APP_COPYRIGHT = "作者:禾禾椰"
 PROJECT_URL = "https://www.douyin.com/user/MS4wLjABAAAAOyqvejBV5f3GmXNbmeCmkCRQJ84Lcluy1uMeWwKa7o0"
 
@@ -209,6 +210,20 @@ def apply_transforms(frame):
         frame = cv.flip(frame, 1)
     
     return frame
+
+def calculate_angle(a, b, c):
+    """计算三个点形成的夹角 (0-180度)"""
+    a = np.array(a)  # First
+    b = np.array(b)  # Mid
+    c = np.array(c)  # End
+    
+    radians = np.arctan2(c[1]-b[1], c[0]-b[0]) - np.arctan2(a[1]-b[1], a[0]-b[0])
+    angle = np.abs(radians*180.0/np.pi)
+    
+    if angle > 180.0:
+        angle = 360-angle
+        
+    return angle
 
 # ==================== 截图相关函数 ====================
 def is_finger_still(current_pos):
@@ -369,7 +384,7 @@ def draw_landmarks(image, landmark_point):
     return image
 
 def classify_gesture(image: np.ndarray):
-    """检测手部并提取食指位置"""
+    """检测手部并提取食指位置 (增强版: 角度分析 + 时序滤波)"""
     global frame_point1, frame_point2, screenshot_state, current_gesture
     
     # 转换为RGB用于MediaPipe处理
@@ -382,7 +397,7 @@ def classify_gesture(image: np.ndarray):
     image_small.flags.writeable = False
     results = hands.process(image_small)
     
-    hand_sign_id = -1
+    raw_gesture_id = -1  # 本帧的原始识别结果
     index_finger_pos = None
     landmarks_list = None
     
@@ -391,16 +406,42 @@ def classify_gesture(image: np.ndarray):
             landmarks = []
             for landmark in hand_landmarks.landmark:
                 landmarks.append([landmark.x, landmark.y])
-
-            # 手势识别逻辑
-            dist_4_8 = np.sqrt((landmarks[4][0]-landmarks[8][0])**2 + (landmarks[4][1]-landmarks[8][1])**2)
             
-            if dist_4_8 < 0.05:
-                hand_sign_id = 3  # OK手势
-            elif landmarks[8][1] < landmarks[5][1]:  # 食指伸出
-                hand_sign_id = 2  # Pointer手势
-            else:
-                hand_sign_id = -1
+            # 将归一化坐标转换为像素坐标(用于角度计算)
+            # 注意: 计算角度最好用像素坐标以保持比例,或者统一纵横比
+            # 这里简单处理,直接用归一化坐标计算角度也行,但会有透视误差. 
+            # 既然是简单判断,先用归一化坐标.
+            
+            # 定义关键点索引
+            # 0: wrist, 1-4: thumb, 5-8: index, 9-12: middle, 13-16: ring, 17-20: pinky
+            
+            # 计算各手指弯曲角度 (关节 0, 1, 2) -> (base, mid, tip) is wrong.
+            # Correct joints for flexion:
+            # Thumb: 2-3-4 (IP joint) seems useful, but usually verify 1-2-4 or angle between 2-3-4.
+            # Others: 5-6-7 (MCP-PIP-DIP) is not straight line. 
+            # Usually check angle at PIP (e.g. 5-6-7) or simply dist tip to palm.
+            
+            # 让我们使用更鲁棒的角度判断:
+            # MCP(root) -> PIP(mid) -> DIP(distal) is usually straight when open.
+            # We measure angle at PIP (e.g. indices 5, 6, 7)
+            
+            # Thumb angle: 2, 3, 4
+            angle_thumb = calculate_angle(landmarks[2], landmarks[3], landmarks[4])
+            # Index angle: 5, 6, 7
+            angle_index = calculate_angle(landmarks[5], landmarks[6], landmarks[7])
+            # Middle angle: 9, 10, 11
+            angle_middle = calculate_angle(landmarks[9], landmarks[10], landmarks[11])
+            # Ring angle: 13, 14, 15
+            angle_ring = calculate_angle(landmarks[13], landmarks[14], landmarks[15])
+            # Pinky angle: 17, 18, 19
+            angle_pinky = calculate_angle(landmarks[17], landmarks[18], landmarks[19])
+            
+            # 判断手指伸直/弯曲 (阈值宽松一点, >160 直, <100 弯)
+            is_thumb_open = angle_thumb > 150 # 拇指比较特殊
+            is_index_open = angle_index > 160
+            is_middle_open = angle_middle > 160
+            is_ring_open = angle_ring > 160
+            is_pinky_open = angle_pinky > 160
             
             # 获取食指尖端位置
             img_width, img_height = image.shape[1], image.shape[0]
@@ -408,33 +449,73 @@ def classify_gesture(image: np.ndarray):
                 int(landmarks[8][0] * img_width),
                 int(landmarks[8][1] * img_height)
             ]
-            
             landmarks_list = landmarks
+
+            # === 核心手势逻辑 ===
+            
+            # 1. Pointer (指指点点)
+            # 要求: 食指伸直, 其他三指(中无小)弯曲. 拇指随意(通常弯曲或自然放置)
+            if is_index_open and (not is_middle_open) and (not is_ring_open) and (not is_pinky_open):
+                # 额外校验: 指尖方向向上 (y坐标 8 < 6)
+                if landmarks[8][1] < landmarks[6][1]: 
+                     raw_gesture_id = 2
+            
+            # 2. OK 手势
+            # 要求: 拇指与食指尖端靠近, 其余三指伸直
+            else:
+                dist_thumb_index = np.sqrt((landmarks[4][0]-landmarks[8][0])**2 + (landmarks[4][1]-landmarks[8][1])**2)
+                # OK手势通常其余三指是伸直的, 如果其余三指也弯曲那就是捏合/鸟嘴
+                if dist_thumb_index < 0.05 and is_middle_open and is_ring_open and is_pinky_open:
+                     raw_gesture_id = 3
+
             break
     
-    # 更新截图状态机
-    update_screenshot_state(image, hand_sign_id, index_finger_pos)
+    # === 时序滤波 (Debouncing) ===
+    gesture_history.append(raw_gesture_id)
     
-    # 简化绘制:只绘制指尖关键点 (不绘制骨架,大幅提升性能)
+    # 统计缓冲区中最多的状态
+    most_common = Counter(gesture_history).most_common(1)
+    if not most_common:
+        stable_gesture_id = -1
+    else:
+        # 只有当缓冲区中 75% 以上一致时才切换状态 (8个里至少6个)
+        mode_id, count = most_common[0]
+        if count >= 6:
+            stable_gesture_id = mode_id
+        else:
+            # 不稳定时保持上一帧状态(或者保持 -1), 这里选择保持 -1 更安全(宁缺毋滥)
+            stable_gesture_id = -1
+
+            # 另一种策略: 如果不稳定, 沿用上一次的 stable 状态? 
+            # 简单起见, 不稳定就视为 no hand, 避免乱跳
+    
+    # 更新截图状态机 (使用滤波后的结果)
+    update_screenshot_state(image, stable_gesture_id, index_finger_pos)
+    
+    # 绘制
     if landmarks_list is not None:
         img_width, img_height = image.shape[1], image.shape[0]
-        # 只绘制5个指尖
         key_points = [4, 8, 12, 16, 20]
+        # 根据识别结果改变绘制颜色
+        color = (0, 255, 0) # 默认绿
+        if stable_gesture_id == 2: color = (0, 255, 255) # 黄 Pointer
+        elif stable_gesture_id == 3: color = (255, 0, 255) # 紫 OK
+        
         for i in key_points:
             pt = (int(landmarks_list[i][0] * img_width), int(landmarks_list[i][1] * img_height))
-            cv.circle(image, pt, 6, (0, 255, 0), -1)  # 绿色实心圆
+            cv.circle(image, pt, 6, color, -1)
     
-    # 绘制截图框定区域
+    # 绘制截图框
     with screenshot_state_lock:
         if frame_point1 and frame_point2 and screenshot_state in [STATE_DETECTING, STATE_FRAMING]:
             cv.rectangle(image, tuple(frame_point1), tuple(frame_point2), (0, 255, 0), 2)
             cv.circle(image, tuple(frame_point1), 6, (255, 0, 0), -1)
     
-    # 更新全局手势变量
+    # 更新全局
     gesture_text = "no hand"
-    if hand_sign_id == 3:
+    if stable_gesture_id == 3:
         gesture_text = "ok"
-    elif hand_sign_id == 2:
+    elif stable_gesture_id == 2:
         gesture_text = "pointer"
     
     with current_gesture_lock:
@@ -571,9 +652,9 @@ async def lifespan(app: FastAPI):
     hands = mp_hands.Hands(
         static_image_mode=False,
         max_num_hands=1,
-        min_detection_confidence=0.5,
-        min_tracking_confidence=0.5,
-        model_complexity=0  # 轻量级模型
+        min_detection_confidence=0.7,   # 提高检测阈值
+        min_tracking_confidence=0.6,    # 提高跟踪阈值
+        model_complexity=1              # 提高模型复杂度 (0->1)
     )
     print("MediaPipe模型加载成功")
 
