@@ -7,9 +7,10 @@ import warnings
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '2'
 warnings.filterwarnings('ignore', category=DeprecationWarning)
 
-from fastapi import FastAPI, Request, Response
+from fastapi import FastAPI, Request, Response, WebSocket, WebSocketDisconnect
 from fastapi.responses import JSONResponse, FileResponse
 from datetime import datetime
+import asyncio
 import cv2 as cv
 import numpy as np
 import mediapipe as mp
@@ -714,13 +715,33 @@ async def screenshot_result_page():
     """截图结果页面"""
     return FileResponse("screenshot_result.html")
 
-@app.get("/video_feed")
-async def video_feed():
-    """提供给前端显示的视频流接口"""
-    with latest_frame_lock:
-        if latest_frame is None:
-            return Response(content=b"", status_code=200, media_type="image/jpeg")
-        return Response(content=latest_frame, media_type="image/jpeg")
+@app.websocket("/ws/video")
+async def websocket_video_stream(websocket: WebSocket):
+    """WebSocket 视频流推送接口"""
+    await websocket.accept()
+    last_frame_id = None
+    
+    try:
+        while True:
+            current_frame = None
+            with latest_frame_lock:
+                if latest_frame is not None:
+                    # 使用帧 ID 避免重复发送相同帧
+                    frame_id = id(latest_frame)
+                    if frame_id != last_frame_id:
+                        current_frame = latest_frame
+                        last_frame_id = frame_id
+            
+            if current_frame:
+                await websocket.send_bytes(current_frame)
+            
+            # 等待约 33ms (30 FPS)
+            await asyncio.sleep(0.033)
+            
+    except WebSocketDisconnect:
+        print("[WebSocket] 客户端断开连接")
+    except Exception as e:
+        print(f"[WebSocket] 错误: {e}")
 
 @app.get("/screenshot_status")
 async def screenshot_status():

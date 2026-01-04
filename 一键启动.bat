@@ -36,15 +36,13 @@ if not exist "myenv" (
     echo [INFO] 正在创建虚拟环境...
     python -m venv myenv
     echo [INFO] 正在安装依赖，请稍候...
-    call myenv\Scripts\activate.bat
-    pip install -r requirements.txt
-) else (
-    call myenv\Scripts\activate.bat
+    myenv\Scripts\pip install -r requirements.txt
 )
 
 echo [INFO] start_service...
 
-python service.py
+REM 明确使用虚拟环境的 Python
+myenv\Scripts\python.exe service.py
 pause
 exit /b 0
 

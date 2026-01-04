@@ -240,7 +240,7 @@
 </head>
 
 <body>
-    <img id="videoFeed" src="/video_feed" alt="视频流">
+    <img id="videoFeed" src="" alt="视频流">
 
     <div class="top-right-controls">
         <div class="settings-wrapper">
@@ -282,37 +282,54 @@
     </div>
 
     <script>
-        // 视频流刷新优化
-        let lastUpdateTime = 0;
-        const UPDATE_INTERVAL = 200; // 降低到200ms,减少请求频率
+        // 视频流 WebSocket 连接
+        let videoWs = null;
+        let reconnectTimer = null;
+        const img = document.getElementById('videoFeed');
 
-        function refreshVideoFeed() {
-            const now = Date.now();
-            if (now - lastUpdateTime < UPDATE_INTERVAL) {
-                return; // 跳过过于频繁的刷新
-            }
-            lastUpdateTime = now;
+        function connectVideoWebSocket() {
+            const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+            const wsUrl = `${protocol}//${window.location.host}/ws/video`;
 
-            const img = document.getElementById('videoFeed');
-            const newSrc = '/video_feed?t=' + now;
+            console.log("[WebSocket] 连接视频流:", wsUrl);
+            videoWs = new WebSocket(wsUrl);
 
-            // 预加载图像,避免闪烁
-            const tempImg = new Image();
-            tempImg.onload = function () {
-                img.src = newSrc;
+            videoWs.onopen = function () {
+                console.log("[WebSocket] 视频流已连接");
+                if (reconnectTimer) {
+                    clearInterval(reconnectTimer);
+                    reconnectTimer = null;
+                }
             };
-            tempImg.onerror = function () {
-                console.warn('Failed to load video feed');
+
+            videoWs.onmessage = function (event) {
+                // 接收二进制图片数据
+                const blob = event.data;
+                const newUrl = URL.createObjectURL(blob);
+
+                // 释放旧的 Blob URL 避免内存泄漏
+                if (img.src && img.src.startsWith('blob:')) {
+                    URL.revokeObjectURL(img.src);
+                }
+
+                img.src = newUrl;
             };
-            tempImg.src = newSrc;
+
+            videoWs.onclose = function () {
+                console.log("[WebSocket] 连接断开，2秒后重连...");
+                if (!reconnectTimer) {
+                    reconnectTimer = setInterval(connectVideoWebSocket, 2000);
+                }
+            };
+
+            videoWs.onerror = function (err) {
+                console.error("[WebSocket] 错误:", err);
+                videoWs.close();
+            };
         }
 
-        // 使用requestAnimationFrame优化刷新
-        function animateVideoFeed() {
-            refreshVideoFeed();
-            requestAnimationFrame(animateVideoFeed);
-        }
-        animateVideoFeed();
+        // 启动 WebSocket 连接
+        connectVideoWebSocket();
 
         // 定期更新状态
         setInterval(updateStatus, 500);
