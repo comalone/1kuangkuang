@@ -5,6 +5,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>AI小助理</title>
+    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
     <style>
         * {
             margin: 0;
@@ -23,6 +24,7 @@
             background: #000;
         }
 
+        /* 视频流容器 */
         #videoFeed {
             position: fixed;
             top: 0;
@@ -33,6 +35,130 @@
             z-index: 1;
         }
 
+        /* AI分析面板 */
+        #aiAnalysisPanel {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100vw;
+            height: 100vh;
+            background: radial-gradient(circle at center, #2c3e50 0%, #000000 100%);
+            display: none;
+            flex-direction: column;
+            justify-content: flex-start;
+            align-items: center;
+            padding: 60px 20px;
+            z-index: 100;
+            overflow-y: auto;
+        }
+
+        #aiAnalysisPanel.show {
+            display: flex;
+        }
+
+        #aiAnalysisPanel h3 {
+            color: #fff;
+            font-size: 2.2em;
+            margin-bottom: 30px;
+            border-bottom: 2px solid rgba(255, 255, 255, 0.2);
+            padding-bottom: 15px;
+        }
+
+        .ai-content-wrapper {
+            max-width: 900px;
+            width: 100%;
+        }
+
+        #aiResponseText {
+            color: #eee;
+            line-height: 1.8;
+            font-size: 1em;
+            text-align: left;
+        }
+
+        #aiResponseText h3 {
+            color: #667eea;
+            margin: 25px 0 15px 0;
+            font-size: 1.4em;
+            border-bottom: 1px solid rgba(102, 126, 234, 0.3);
+            padding-bottom: 5px;
+        }
+
+        #aiResponseText p {
+            margin-bottom: 15px;
+        }
+
+        #aiResponseText ul,
+        #aiResponseText ol {
+            margin-left: 25px;
+            margin-bottom: 15px;
+        }
+
+        #aiResponseText li {
+            margin-bottom: 8px;
+        }
+
+        #aiResponseText strong {
+            color: #ffadad;
+        }
+
+        .cursor {
+            display: inline-block;
+            width: 4px;
+            height: 1.2em;
+            background-color: #667eea;
+            margin-left: 8px;
+            vertical-align: middle;
+            animation: blink 1s step-end infinite;
+        }
+
+        @keyframes blink {
+
+            from,
+            to {
+                background-color: transparent;
+            }
+
+            50% {
+                background-color: #667eea;
+            }
+        }
+
+        .loading {
+            animation: pulse 1.5s infinite;
+            color: #667eea !important;
+            font-style: italic;
+        }
+
+        @keyframes pulse {
+
+            0%,
+            100% {
+                opacity: 1;
+            }
+
+            50% {
+                opacity: 0.5;
+            }
+        }
+
+        /* 截图预览 */
+        #screenshotImage {
+            position: fixed;
+            bottom: 20px;
+            left: 20px;
+            width: 300px;
+            height: auto;
+            max-height: 225px;
+            object-fit: cover;
+            z-index: 110;
+            border-radius: 12px;
+            border: 3px solid rgba(255, 255, 255, 0.9);
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
+            display: none;
+        }
+
+        /* 顶部控制按钮 */
         .top-right-controls {
             position: fixed;
             top: 20px;
@@ -42,69 +168,7 @@
             z-index: 10;
         }
 
-        .status-panel {
-            position: fixed;
-            bottom: 20px;
-            left: 20px;
-            width: 240px;
-            background: rgba(255, 255, 255, 0.8);
-            backdrop-filter: blur(10px);
-            border-radius: 15px;
-            padding: 8px;
-            z-index: 10;
-        }
-
-        .status-item {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            margin: 2px;
-        }
-
-        .status-label {
-            font-weight: bold;
-            color: #333;
-            font-size: 0.95em;
-        }
-
-        .status-value {
-            color: #667eea;
-            font-size: 0.95em;
-            font-weight: 600;
-        }
-
-        .state-badge {
-            padding: 5px 12px;
-            border-radius: 15px;
-            font-weight: bold;
-            font-size: 0.85em;
-        }
-
-        .state-idle {
-            background: #e0e0e0;
-            color: #666;
-        }
-
-        .state-detecting {
-            background: #fff3cd;
-            color: #856404;
-        }
-
-        .state-framing {
-            background: #d1ecf1;
-            color: #0c5460;
-        }
-
-        .state-waiting_capture {
-            background: #f8d7da;
-            color: #721c24;
-        }
-
-        .state-captured {
-            background: #d4edda;
-            color: #155724;
-        }
-
+        /* 按钮样式 */
         .btn {
             padding: 12px 20px;
             font-size: 1em;
@@ -133,6 +197,7 @@
             color: #333;
         }
 
+        /* 设置菜单 */
         .settings-menu {
             display: none;
             position: fixed;
@@ -144,13 +209,42 @@
             border-radius: 20px;
             padding: 20px;
             box-shadow: 0 15px 50px rgba(0, 0, 0, 0.5);
-            width: 240px;
+            width: 320px;
             flex-direction: column;
-            z-index: 20;
+            z-index: 200;
+            max-height: 80vh;
+            overflow-y: auto;
         }
 
         .settings-menu.show {
             display: flex;
+        }
+
+        .settings-header {
+            font-size: 1.1em;
+            font-weight: bold;
+            color: #333;
+            margin-bottom: 15px;
+            text-align: center;
+            border-bottom: 1px solid #eee;
+            padding-bottom: 10px;
+        }
+
+        .settings-section {
+            margin-bottom: 15px;
+            padding-bottom: 15px;
+            border-bottom: 1px solid #eee;
+        }
+
+        .settings-section:last-child {
+            border-bottom: none;
+        }
+
+        .settings-section-title {
+            font-size: 0.9em;
+            font-weight: bold;
+            color: #666;
+            margin-bottom: 10px;
         }
 
         .menu-item {
@@ -164,6 +258,7 @@
             color: #333;
             transition: all 0.2s;
             white-space: nowrap;
+            width: 100%;
         }
 
         .menu-item:hover {
@@ -171,14 +266,14 @@
             color: #667eea;
         }
 
-        .settings-header {
-            font-size: 1.1em;
-            font-weight: bold;
-            color: #333;
-            margin-bottom: 15px;
-            text-align: center;
-            border-bottom: 1px solid #eee;
-            padding-bottom: 10px;
+        .menu-item.active {
+            background: #667eea;
+            color: white;
+        }
+
+        .menu-item:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
         }
 
         .app-info-section {
@@ -198,7 +293,7 @@
             margin-top: 5px;
         }
 
-        /* Prompt Panel Styles */
+        /* 提示词面板 */
         .prompt-panel {
             position: fixed;
             bottom: 20px;
@@ -236,20 +331,90 @@
             color: white;
             border-color: #4facfe;
         }
+
+        /* 返回按钮 */
+        .btn-back {
+            position: fixed;
+            bottom: 20px;
+            right: 20px;
+            background: rgba(102, 126, 234, 0.9);
+            color: white;
+            padding: 15px 30px;
+            border-radius: 12px;
+            font-size: 1.1em;
+            z-index: 110;
+            display: none;
+        }
+
+        .btn-back.show {
+            display: block;
+        }
+
+        /* 成功消息 */
+        .success-message {
+            position: fixed;
+            top: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: rgba(212, 237, 218, 0.9);
+            color: #155724;
+            padding: 10px 25px;
+            border-radius: 30px;
+            font-size: 1.1em;
+            font-weight: bold;
+            z-index: 120;
+            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.2);
+            backdrop-filter: blur(5px);
+            display: none;
+        }
+
+        .success-message.show {
+            display: block;
+        }
     </style>
 </head>
 
 <body>
+    <!-- 视频流 -->
     <img id="videoFeed" src="" alt="视频流">
 
+    <!-- AI分析面板 -->
+    <div id="aiAnalysisPanel">
+        <h3><span>🤖</span> AI小助理:</h3>
+        <div class="ai-content-wrapper">
+            <div id="aiResponseText" class="loading">正在分析中...</div>
+            <span id="cursor" class="cursor" style="display:none;"></span>
+        </div>
+    </div>
+
+    <!-- 截图预览 -->
+    <img id="screenshotImage" alt="截图结果">
+
+    <!-- 成功消息 -->
+    <div id="successMessage" class="success-message">截图成功~</div>
+
+    <!-- 顶部控制 -->
     <div class="top-right-controls">
         <div class="settings-wrapper">
             <button class="btn btn-settings" onclick="toggleSettings()">⚙️ 设置</button>
             <div id="settingsMenu" class="settings-menu">
                 <div class="settings-header">系统设置</div>
-                <button class="menu-item" onclick="toggleRotate()">旋转画面</button>
-                <button class="menu-item" onclick="toggleMirror()">镜像画面</button>
 
+                <!-- 画面设置 -->
+                <div class="settings-section">
+                    <div class="settings-section-title">📹 画面设置</div>
+                    <button class="menu-item" onclick="toggleRotate()">旋转画面</button>
+                    <button class="menu-item" onclick="toggleMirror()">镜像画面</button>
+                </div>
+
+                <!-- AI模型设置 -->
+                <div class="settings-section">
+                    <div class="settings-section-title">🤖 AI模型</div>
+                    <button class="menu-item" id="qwenButton" onclick="switchAPI('qwen')">通义千问</button>
+                    <button class="menu-item" id="doubaoButton" onclick="switchAPI('doubao')">豆包</button>
+                </div>
+
+                <!-- 应用信息 -->
                 <div class="app-info-section">
                     <a id="appTitleLink" href="#" target="_blank" style="text-decoration: none; color: inherit;">
                         <div id="appName" style="font-weight: bold; color: #333; margin-bottom: 5px;">加载中...</div>
@@ -261,38 +426,33 @@
         </div>
     </div>
 
+    <!-- 提示词面板 -->
     <div class="prompt-panel">
         <h3>💡 AI任务</h3>
         <div id="promptList"></div>
     </div>
 
-    <div class="status-panel">
-        <div class="status-item">
-            <span class="status-label">实时帧率:</span>
-            <span id="fpsDisplay" class="status-value">-- FPS</span>
-        </div>
-        <div class="status-item">
-            <span class="status-label">当前状态:</span>
-            <span id="currentState" class="state-badge state-idle">IDLE</span>
-        </div>
-        <div class="status-item">
-            <span class="status-label">截图状态:</span>
-            <span id="screenshotStatus" class="status-value">等待开始</span>
-        </div>
-    </div>
+    <!-- 返回按钮 -->
+    <button class="btn btn-back" id="btnBack" onclick="backToCapture()">👌 返回拍摄</button>
 
     <script>
-        // 视频流 WebSocket 连接
+        marked.setOptions({ breaks: true });
+
+        // 全局状态
+        let currentView = 'capture'; // 'capture' or 'result'
         let videoWs = null;
         let reconnectTimer = null;
-        const img = document.getElementById('videoFeed');
+        let isResetting = false;
 
+        // ==================== WebSocket 视频流 ====================
         function connectVideoWebSocket() {
             const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
             const wsUrl = `${protocol}//${window.location.host}/ws/video`;
 
             console.log("[WebSocket] 连接视频流:", wsUrl);
             videoWs = new WebSocket(wsUrl);
+
+            const img = document.getElementById('videoFeed');
 
             videoWs.onopen = function () {
                 console.log("[WebSocket] 视频流已连接");
@@ -303,20 +463,24 @@
             };
 
             videoWs.onmessage = function (event) {
-                // 接收二进制图片数据
-                const blob = event.data;
-                const newUrl = URL.createObjectURL(blob);
-
-                // 释放旧的 Blob URL 避免内存泄漏
-                if (img.src && img.src.startsWith('blob:')) {
-                    URL.revokeObjectURL(img.src);
+                // 如果收到文本消息 "CAPTURED"，说明截图完成
+                if (typeof event.data === 'string' && event.data === 'CAPTURED') {
+                    if (currentView === 'capture') {
+                        showResultView();
+                    }
+                } else {
+                    // 否则是视频帧 Blob
+                    const blob = event.data;
+                    const newUrl = URL.createObjectURL(blob);
+                    if (img.src && img.src.startsWith('blob:')) {
+                        URL.revokeObjectURL(img.src);
+                    }
+                    img.src = newUrl;
                 }
-
-                img.src = newUrl;
             };
 
             videoWs.onclose = function () {
-                console.log("[WebSocket] 连接断开，2秒后重连...");
+                console.log("[WebSocket] 连接断开,2秒后重连...");
                 if (!reconnectTimer) {
                     reconnectTimer = setInterval(connectVideoWebSocket, 2000);
                 }
@@ -328,77 +492,137 @@
             };
         }
 
-        // 启动 WebSocket 连接
-        connectVideoWebSocket();
+        // ==================== 视图切换 ====================
+        function showResultView() {
+            currentView = 'result';
 
-        // 定期更新状态
-        setInterval(updateStatus, 500);
+            // 显示AI分析面板和截图
+            document.getElementById('aiAnalysisPanel').classList.add('show');
+            document.getElementById('screenshotImage').style.display = 'block';
+            document.getElementById('btnBack').classList.add('show');
+            document.getElementById('successMessage').classList.add('show');
 
-        async function updateStatus() {
+            // 隐藏状态面板和提示词面板
+            document.querySelector('.prompt-panel').style.display = 'none';
+
+            // 加载截图和AI分析
+            loadScreenshot();
+            loadAIResponse();
+
+            // 3秒后隐藏成功消息
+            setTimeout(() => {
+                document.getElementById('successMessage').classList.remove('show');
+            }, 3000);
+        }
+
+        function showCaptureView() {
+            currentView = 'capture';
+
+            // 隐藏AI分析面板和截图
+            document.getElementById('aiAnalysisPanel').classList.remove('show');
+            document.getElementById('screenshotImage').style.display = 'none';
+            document.getElementById('btnBack').classList.remove('show');
+            document.getElementById('successMessage').classList.remove('show');
+
+            // 显示状态面板和提示词面板
+            document.querySelector('.prompt-panel').style.display = 'block';
+        }
+
+        async function backToCapture() {
+            if (isResetting) return;
+            isResetting = true;
+
             try {
-                const response = await fetch('/screenshot_status');
-                const data = await response.json();
-
-                // 更新状态显示
-                const stateElement = document.getElementById('currentState');
-                stateElement.textContent = data.state.toUpperCase();
-                stateElement.className = 'state-badge state-' + data.state;
-
-                // 更新截图状态文本
-                const statusElement = document.getElementById('screenshotStatus');
-                if (data.has_screenshot) {
-                    statusElement.textContent = '截图已完成 ✓';
-                    statusElement.style.color = '#28a745';
+                const response = await fetch('/reset_screenshot', { method: 'POST' });
+                if (response.ok) {
+                    showCaptureView();
                 } else {
-                    const statusTexts = {
-                        'idle': '等待开始',
-                        'detecting': '检测中,请保持静止...',
-                        'framing': '框定区域中...',
-                        'waiting_capture': '准备截图...',
-                        'captured': '截图完成!'
-                    };
-                    statusElement.textContent = statusTexts[data.state] || '未知状态';
-                    statusElement.style.color = '#667eea';
-                }
-
-                // 如果截图完成,自动跳转
-                if (data.state === 'captured' && data.has_screenshot) {
-                    setTimeout(() => {
-                        window.location.href = '/screenshot_result.html';
-                    }, 2000);
-                }
-
-                // 获取并显示帧率
-                try {
-                    const perfResponse = await fetch('/performance_stats');
-                    const perfData = await perfResponse.json();
-                    const fpsElement = document.getElementById('fpsDisplay');
-                    if (perfData.fps !== undefined) {
-                        fpsElement.textContent = `${perfData.fps} FPS`;
-                        // 根据帧率设置颜色
-                        if (perfData.fps >= 25) {
-                            fpsElement.style.color = '#28a745'; // 绿色
-                        } else if (perfData.fps >= 15) {
-                            fpsElement.style.color = '#ffc107'; // 黄色
-                        } else {
-                            fpsElement.style.color = '#dc3545'; // 红色
-                        }
-                    }
-                } catch (err) {
-                    // 如果性能统计接口不可用,显示 N/A
-                    document.getElementById('fpsDisplay').textContent = 'N/A';
+                    alert('重置失败');
                 }
             } catch (error) {
-                console.error('获取状态失败:', error);
+                console.error('重置失败:', error);
+                alert('网络请求失败,请重试');
+            } finally {
+                isResetting = false;
             }
         }
 
+        // ==================== 截图和AI分析 ====================
+        async function loadScreenshot() {
+            try {
+                const img = document.getElementById('screenshotImage');
+                img.src = '/get_screenshot?t=' + new Date().getTime();
+            } catch (error) {
+                console.error('加载截图失败:', error);
+            }
+        }
+
+        async function loadAIResponse() {
+            const aiText = document.getElementById('aiResponseText');
+            aiText.classList.add('loading');
+            aiText.textContent = '正在分析中...';
+
+            const fetchAI = async () => {
+                try {
+                    const response = await fetch('/get_ai_response?t=' + new Date().getTime());
+                    const data = await response.json();
+
+                    if (data.analysis) {
+                        if (data.analysis !== "正在分析中...") {
+                            aiText.classList.remove('loading');
+                            if (data.analysis.includes("失败") || data.analysis.includes("出错") || data.analysis.includes("错误")) {
+                                aiText.style.color = "#f5576c";
+                                aiText.textContent = data.analysis;
+                            } else {
+                                aiText.style.color = "#fff";
+                                typeWriter(data.analysis, aiText);
+                            }
+                            return true;
+                        } else {
+                            aiText.textContent = data.analysis;
+                        }
+                    }
+                } catch (error) {
+                    console.error('获取AI响应失败:', error);
+                }
+                return false;
+            };
+
+            const poll = async () => {
+                const finished = await fetchAI();
+                if (!finished) {
+                    setTimeout(poll, 2000);
+                }
+            };
+
+            poll();
+        }
+
+        function typeWriter(text, element, speed = 10) {
+            const cursor = document.getElementById('cursor');
+            if (cursor) cursor.style.display = 'inline-block';
+            element.innerHTML = "";
+            let i = 0;
+            let currentText = "";
+            function type() {
+                if (i < text.length) {
+                    currentText += text.charAt(i);
+                    element.innerHTML = marked.parse(currentText);
+                    i++;
+                    setTimeout(type, speed);
+                } else {
+                    if (cursor) cursor.style.display = 'none';
+                }
+            }
+            type();
+        }
+
+        // ==================== 设置功能 ====================
         function toggleSettings() {
             const menu = document.getElementById('settingsMenu');
             menu.classList.toggle('show');
         }
 
-        // 点击弹窗外部关闭
         window.addEventListener('click', function (event) {
             const settingsMenu = document.getElementById('settingsMenu');
             const settingsBtn = document.querySelector('.btn-settings');
@@ -426,6 +650,53 @@
             }
         }
 
+        // ==================== API切换 ====================
+        async function loadAPIProvider() {
+            try {
+                const response = await fetch('/get_api_provider');
+                const data = await response.json();
+
+                const qwenBtn = document.getElementById('qwenButton');
+                const doubaoBtn = document.getElementById('doubaoButton');
+
+                // 更新按钮状态
+                qwenBtn.classList.toggle('active', data.provider === 'qwen');
+                doubaoBtn.classList.toggle('active', data.provider === 'doubao');
+
+                // 禁用未配置的API
+                qwenBtn.disabled = !data.qwen_configured;
+                doubaoBtn.disabled = !data.doubao_configured;
+
+            } catch (error) {
+                console.error('加载API提供商失败:', error);
+            }
+        }
+
+        async function switchAPI(provider) {
+            try {
+                const response = await fetch('/set_api_provider', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ provider: provider })
+                });
+
+                const data = await response.json();
+
+                if (response.ok) {
+                    console.log(data.message);
+                    loadAPIProvider();
+                } else {
+                    alert(data.error || 'API切换失败');
+                }
+            } catch (error) {
+                console.error('切换API失败:', error);
+                alert('切换API失败,请重试');
+            }
+        }
+
+        // ==================== 提示词功能 ====================
         async function loadPrompts() {
             try {
                 const response = await fetch('/get_prompts');
@@ -439,7 +710,6 @@
                     div.onclick = () => selectPrompt(prompt, div);
                     listContainer.appendChild(div);
 
-                    // 默认选中第一个
                     if (index === 0) selectPrompt(prompt, div);
                 });
             } catch (error) {
@@ -462,6 +732,7 @@
             }
         }
 
+        // ==================== 应用信息 ====================
         async function loadAppInfo() {
             try {
                 const response = await fetch('/app_info');
@@ -477,10 +748,11 @@
             }
         }
 
-        // 初始化时更新一次状态
-        updateStatus();
+        // ==================== 初始化 ====================
+        connectVideoWebSocket();
         loadPrompts();
         loadAppInfo();
+        loadAPIProvider();
     </script>
 </body>
 

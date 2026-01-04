@@ -63,8 +63,6 @@ frame_point2 = None
 screenshot_image = None
 current_frame_for_screenshot = None
 last_screenshot_path = None
-current_gesture = "no hand"
-current_gesture_lock = threading.Lock()
 gesture_history = deque(maxlen=8)  # 时序滤波缓冲区
 
 # AI 分析相关
@@ -488,7 +486,7 @@ def draw_landmarks(image, landmark_point):
 
 def classify_gesture(image: np.ndarray):
     """检测手部并提取食指位置 (增强版: 角度分析 + 时序滤波)"""
-    global frame_point1, frame_point2, screenshot_state, current_gesture
+    global frame_point1, frame_point2, screenshot_state
     
     # 转换为RGB用于MediaPipe处理
     image_rgb = cv.cvtColor(image, cv.COLOR_BGR2RGB)
@@ -562,15 +560,6 @@ def classify_gesture(image: np.ndarray):
                 # 额外校验: 指尖方向向上 (y坐标 8 < 6)
                 if landmarks[8][1] < landmarks[6][1]: 
                      raw_gesture_id = 2
-            
-            # 2. OK 手势
-            # 要求: 拇指与食指尖端靠近, 其余三指伸直
-            else:
-                dist_thumb_index = np.sqrt((landmarks[4][0]-landmarks[8][0])**2 + (landmarks[4][1]-landmarks[8][1])**2)
-                # OK手势通常其余三指是伸直的, 如果其余三指也弯曲那就是捏合/鸟嘴
-                if dist_thumb_index < 0.05 and is_middle_open and is_ring_open and is_pinky_open:
-                     raw_gesture_id = 3
-
             break
     
     # === 时序滤波 (Debouncing) ===
@@ -602,7 +591,6 @@ def classify_gesture(image: np.ndarray):
         # 根据识别结果改变绘制颜色
         color = (0, 255, 0) # 默认绿
         if stable_gesture_id == 2: color = (0, 255, 255) # 黄 Pointer
-        elif stable_gesture_id == 3: color = (255, 0, 255) # 紫 OK
         
         for i in key_points:
             pt = (int(landmarks_list[i][0] * img_width), int(landmarks_list[i][1] * img_height))
@@ -616,14 +604,9 @@ def classify_gesture(image: np.ndarray):
     
     # 更新全局
     gesture_text = "no hand"
-    if stable_gesture_id == 3:
-        gesture_text = "ok"
-    elif stable_gesture_id == 2:
+    if stable_gesture_id == 2:
         gesture_text = "pointer"
     
-    with current_gesture_lock:
-        current_gesture = gesture_text
-        
     return gesture_text, image
 
 # ==================== 三线程架构 ====================
@@ -814,22 +797,30 @@ async def root():
 
 @app.get("/screenshot.html")
 async def screenshot_page():
-    """截图页面"""
+    """单页应用 - 截图和AI分析"""
     return FileResponse("screenshot.html")
-
-@app.get("/screenshot_result.html")
-async def screenshot_result_page():
-    """截图结果页面"""
-    return FileResponse("screenshot_result.html")
 
 @app.websocket("/ws/video")
 async def websocket_video_stream(websocket: WebSocket):
     """WebSocket 视频流推送接口"""
     await websocket.accept()
     last_frame_id = None
+    last_sent_state = None
     
     try:
         while True:
+            # 1. 检查截图状态，如果完成则发送通知
+            current_state = None
+            with screenshot_state_lock:
+                current_state = screenshot_state
+            
+            if current_state == STATE_CAPTURED and last_sent_state != STATE_CAPTURED:
+                await websocket.send_text("CAPTURED")
+                last_sent_state = STATE_CAPTURED
+            elif current_state == STATE_IDLE:
+                last_sent_state = STATE_IDLE
+
+            # 2. 发送视频帧
             current_frame = None
             with latest_frame_lock:
                 if latest_frame is not None:
@@ -850,25 +841,6 @@ async def websocket_video_stream(websocket: WebSocket):
     except Exception as e:
         print(f"[WebSocket] 错误: {e}")
 
-@app.get("/screenshot_status")
-async def screenshot_status():
-    """获取当前截图状态"""
-    with screenshot_state_lock:
-        state = screenshot_state
-        pt1 = frame_point1
-        pt2 = frame_point2
-    
-    with current_gesture_lock:
-        gesture = current_gesture
-    
-    return JSONResponse(content={
-        "state": state,
-        "point1": pt1,
-        "point2": pt2,
-        "gesture": gesture,
-        "has_screenshot": screenshot_image is not None
-    })
-
 @app.get("/get_screenshot")
 async def get_screenshot():
     """获取截图结果"""
@@ -882,7 +854,7 @@ def reset_screenshot_logic():
     """内部重置逻辑"""
     global screenshot_state, still_start_time, frame_point1, frame_point2
     global screenshot_image, latest_ai_response, last_screenshot_path
-    global current_gesture, current_frame_for_screenshot
+    global current_frame_for_screenshot
     
     with screenshot_state_lock:
         screenshot_state = STATE_IDLE
@@ -893,9 +865,6 @@ def reset_screenshot_logic():
         current_frame_for_screenshot = None
         last_screenshot_path = None
         index_finger_history.clear()
-    
-    with current_gesture_lock:
-        current_gesture = "no hand"
     
     with latest_ai_response_lock:
         latest_ai_response = ""
@@ -958,7 +927,8 @@ async def get_api_provider():
     return JSONResponse(content={
         "provider": provider,
         "qwen_configured": bool(api_key),
-        "doubao_configured": bool(doubao_api_key)
+        "doubao_configured": bool(doubao_api_key),
+        "doubao_model": doubao_model
     })
 
 @app.post("/set_api_provider")
