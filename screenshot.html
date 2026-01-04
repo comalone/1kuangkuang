@@ -221,13 +221,32 @@
         }
 
         .settings-header {
-            font-size: 1.1em;
+            font-size: 1.2em;
             font-weight: bold;
             color: #333;
             margin-bottom: 15px;
-            text-align: center;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
             border-bottom: 1px solid #eee;
             padding-bottom: 10px;
+        }
+
+        .btn-close-settings {
+            background: transparent;
+            border: none;
+            font-size: 1.2em;
+            color: #999;
+            cursor: pointer;
+            padding: 5px;
+            border-radius: 50%;
+            transition: all 0.2s;
+            line-height: 1;
+        }
+
+        .btn-close-settings:hover {
+            background: rgba(0, 0, 0, 0.05);
+            color: #333;
         }
 
         .settings-section {
@@ -244,36 +263,60 @@
             font-size: 0.9em;
             font-weight: bold;
             color: #666;
-            margin-bottom: 10px;
+            margin-bottom: 12px;
+        }
+
+        .settings-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 12px;
         }
 
         .menu-item {
-            padding: 12px 15px;
-            text-align: left;
-            background: transparent;
-            border: none;
-            border-radius: 8px;
+            padding: 15px 10px;
+            text-align: center;
+            background: #f8f9fa;
+            border: 1px solid #eee;
+            border-radius: 12px;
             cursor: pointer;
-            font-size: 0.95em;
+            font-size: 0.9em;
             color: #333;
             transition: all 0.2s;
-            white-space: nowrap;
             width: 100%;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
         }
 
         .menu-item:hover {
-            background: rgba(102, 126, 234, 0.1);
+            background: #fff;
+            border-color: #667eea;
             color: #667eea;
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(102, 126, 234, 0.15);
         }
 
         .menu-item.active {
             background: #667eea;
             color: white;
+            border-color: #667eea;
+            box-shadow: 0 4px 12px rgba(102, 126, 234, 0.3);
+        }
+
+        .menu-item:active {
+            transform: translateY(0);
         }
 
         .menu-item:disabled {
             opacity: 0.5;
             cursor: not-allowed;
+            filter: grayscale(1);
+        }
+
+        .menu-item-icon {
+            font-size: 1.6em;
         }
 
         .app-info-section {
@@ -398,20 +441,39 @@
         <div class="settings-wrapper">
             <button class="btn btn-settings" onclick="toggleSettings()">⚙️ 设置</button>
             <div id="settingsMenu" class="settings-menu">
-                <div class="settings-header">系统设置</div>
+                <div class="settings-header">
+                    <span>系统设置</span>
+                    <button class="btn-close-settings" onclick="toggleSettings()" title="关闭">✕</button>
+                </div>
 
                 <!-- 画面设置 -->
                 <div class="settings-section">
                     <div class="settings-section-title">📹 画面设置</div>
-                    <button class="menu-item" onclick="toggleRotate()">旋转画面</button>
-                    <button class="menu-item" onclick="toggleMirror()">镜像画面</button>
+                    <div class="settings-grid">
+                        <button class="menu-item" onclick="toggleRotate()">
+                            <span class="menu-item-icon">🔄</span>
+                            <span>旋转画面</span>
+                        </button>
+                        <button class="menu-item" onclick="toggleMirror()">
+                            <span class="menu-item-icon">↔️</span>
+                            <span>镜像画面</span>
+                        </button>
+                    </div>
                 </div>
 
                 <!-- AI模型设置 -->
                 <div class="settings-section">
                     <div class="settings-section-title">🤖 AI模型</div>
-                    <button class="menu-item" id="qwenButton" onclick="switchAPI('qwen')">通义千问</button>
-                    <button class="menu-item" id="doubaoButton" onclick="switchAPI('doubao')">豆包</button>
+                    <div class="settings-grid">
+                        <button class="menu-item" id="qwenButton" onclick="switchAPI('qwen')">
+                            <span class="menu-item-icon">🌌</span>
+                            <span>通义千问</span>
+                        </button>
+                        <button class="menu-item" id="doubaoButton" onclick="switchAPI('doubao')">
+                            <span class="menu-item-icon">🥣</span>
+                            <span>豆包</span>
+                        </button>
+                    </div>
                 </div>
 
                 <!-- 应用信息 -->
