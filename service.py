@@ -69,6 +69,11 @@ gesture_history = deque(maxlen=8)  # 时序滤波缓冲区
 
 # AI 分析相关
 api_key = os.getenv("DASHSCOPE_API_KEY")
+doubao_api_key = os.getenv("DOUBAO_API_KEY")  # 豆包API密钥
+doubao_api_url = os.getenv("DOUBAO_API_URL", "https://ark.cn-beijing.volces.com/api/v3/chat/completions")  # 豆包API地址
+doubao_model = os.getenv("DOUBAO_MODEL", "doubao-1.5-vision-pro-250328")  # 豆包模型名称
+current_api_provider = "qwen"  # 当前使用的API提供商: "qwen" 或 "doubao"
+current_api_provider_lock = threading.Lock()
 latest_ai_response = ""
 latest_ai_response_lock = threading.Lock()
 selected_prompt_text = "请描述这张图片中的内容。"
@@ -166,37 +171,134 @@ def call_qwen_vl(api_key, oss_url):
     )
     return response
 
+def call_doubao_vl(api_key, image_url):
+    """调用豆包视觉模型进行图像理解"""
+    global selected_prompt_text, doubao_api_url, doubao_model
+    
+    headers = {
+        "Content-Type": "application/json",
+        "Authorization": f"Bearer {api_key}"
+    }
+    
+    # 构建请求体
+    payload = {
+        "model": doubao_model,
+        "messages": [
+            {
+                "role": "user",
+                "content": [
+                    {
+                        "type": "text",
+                        "text": selected_prompt_text
+                    },
+                    {
+                        "type": "image_url",
+                        "image_url": {
+                            "url": image_url
+                        }
+                    }
+                ]
+            }
+        ]
+    }
+    
+    response = requests.post(doubao_api_url, headers=headers, json=payload, timeout=30)
+    
+    if response.status_code != 200:
+        raise Exception(f"豆包API调用失败: {response.status_code} - {response.text}")
+    
+    return response.json()
+
+def convert_local_image_to_base64(file_path):
+    """将本地图片转换为base64编码的data URL"""
+    import base64
+    
+    with open(file_path, 'rb') as f:
+        image_data = f.read()
+    
+    # 获取文件扩展名
+    ext = Path(file_path).suffix.lower()
+    mime_type = 'image/jpeg' if ext in ['.jpg', '.jpeg'] else 'image/png'
+    
+    # 转换为base64
+    base64_data = base64.b64encode(image_data).decode('utf-8')
+    data_url = f"data:{mime_type};base64,{base64_data}"
+    
+    return data_url
+
 def auto_upload_task(file_path):
     """后台上传任务,避免阻塞识别主循环"""
-    global api_key, latest_ai_response
-    if not api_key:
-        print("自动上传取消: 未配置 api_key")
+    global api_key, doubao_api_key, current_api_provider, latest_ai_response
+    
+    # 获取当前API提供商
+    with current_api_provider_lock:
+        provider = current_api_provider
+    
+    # 检查API密钥
+    if provider == "qwen" and not api_key:
+        print("自动上传取消: 未配置通义千问 API Key")
+        with latest_ai_response_lock:
+            latest_ai_response = "错误: 未配置通义千问 API Key"
         return
+    
+    if provider == "doubao" and not doubao_api_key:
+        print("自动上传取消: 未配置豆包 API Key")
+        with latest_ai_response_lock:
+            latest_ai_response = "错误: 未配置豆包 API Key"
+        return
+    
     try:
         with latest_ai_response_lock:
             latest_ai_response = "正在分析中..."
-        print(f"开始自动上传云端: {file_path}")
-        model_name = "qwen-vl-plus"
-        oss_url = upload_file_and_get_url(api_key, model_name, file_path)
-        print(f"云端上传成功: {oss_url}")
         
-        # 调用 AI 模型进行分析
-        ai_res = call_qwen_vl(api_key, oss_url)
-        if ai_res.status_code == 200:
-            result = ai_res.output.choices[0].message.content[0]['text']
-            with latest_ai_response_lock:
-                latest_ai_response = result
-            print(f"AI 分析结果: {result}")
-        else:
-            error_msg = f"AI 分析失败: {ai_res.message}"
-            with latest_ai_response_lock:
-                latest_ai_response = error_msg
-            print(f"AI 分析失败: {ai_res.code} - {ai_res.message}")
+        if provider == "qwen":
+            # 使用通义千问API
+            print(f"[通义千问] 开始上传云端: {file_path}")
+            model_name = "qwen-vl-plus"
+            oss_url = upload_file_and_get_url(api_key, model_name, file_path)
+            print(f"[通义千问] 云端上传成功: {oss_url}")
+            
+            # 调用通义千问模型进行分析
+            ai_res = call_qwen_vl(api_key, oss_url)
+            if ai_res.status_code == 200:
+                result = ai_res.output.choices[0].message.content[0]['text']
+                with latest_ai_response_lock:
+                    latest_ai_response = result
+                print(f"[通义千问] AI 分析结果: {result}")
+            else:
+                error_msg = f"通义千问分析失败: {ai_res.message}"
+                with latest_ai_response_lock:
+                    latest_ai_response = error_msg
+                print(f"[通义千问] AI 分析失败: {ai_res.code} - {ai_res.message}")
+        
+        elif provider == "doubao":
+            # 使用豆包API
+            print(f"[豆包] 开始分析图片: {file_path}")
+            
+            # 将本地图片转换为base64 data URL
+            image_data_url = convert_local_image_to_base64(file_path)
+            print(f"[豆包] 图片已转换为base64格式")
+            
+            # 调用豆包模型进行分析
+            ai_res = call_doubao_vl(doubao_api_key, image_data_url)
+            
+            # 解析豆包响应
+            if 'choices' in ai_res and len(ai_res['choices']) > 0:
+                result = ai_res['choices'][0]['message']['content']
+                with latest_ai_response_lock:
+                    latest_ai_response = result
+                print(f"[豆包] AI 分析结果: {result}")
+            else:
+                error_msg = f"豆包分析失败: 响应格式异常"
+                with latest_ai_response_lock:
+                    latest_ai_response = error_msg
+                print(f"[豆包] AI 分析失败: {ai_res}")
+        
     except Exception as e:
-        error_msg = f"上传或分析出错: {str(e)}"
+        error_msg = f"[{provider}] 分析出错: {str(e)}"
         with latest_ai_response_lock:
             latest_ai_response = error_msg
-        print(f"云端上传失败: {e}")
+        print(f"[{provider}] 分析失败: {e}")
 
 def apply_transforms(frame):
     """应用旋转和镜像变换"""
@@ -645,8 +747,13 @@ async def lifespan(app: FastAPI):
     global mp_hands, hands, camera_running
     global capture_thread_obj, recognition_thread_obj, encoding_thread_obj
     
+    # 检查API密钥配置
     if not api_key:
-        print("警告: 环境变量 DASHSCOPE_API_KEY 未配置,AI 分析功能将不可用")
+        print("警告: 环境变量 DASHSCOPE_API_KEY 未配置,通义千问 AI 分析功能将不可用")
+    if not doubao_api_key:
+        print("警告: 环境变量 DOUBAO_API_KEY 未配置,豆包 AI 分析功能将不可用")
+    if not api_key and not doubao_api_key:
+        print("警告: 未配置任何 AI API 密钥,AI 分析功能将完全不可用")
 
     print("[INFO] 正在加载 MediaPipe 手势识别模型...")
     mp_hands = mp.solutions.hands
@@ -841,6 +948,56 @@ async def select_prompt(request: Request):
         print(f"提示词已切换为: {selected_prompt_text}")
         return JSONResponse(content={"message": "Prompt updated"})
     return JSONResponse(content={"error": "Invalid prompt"}, status_code=400)
+
+@app.get("/get_api_provider")
+async def get_api_provider():
+    """获取当前使用的API提供商"""
+    with current_api_provider_lock:
+        provider = current_api_provider
+    
+    return JSONResponse(content={
+        "provider": provider,
+        "qwen_configured": bool(api_key),
+        "doubao_configured": bool(doubao_api_key)
+    })
+
+@app.post("/set_api_provider")
+async def set_api_provider(request: Request):
+    """设置当前使用的API提供商"""
+    global current_api_provider
+    
+    data = await request.json()
+    provider = data.get("provider")
+    
+    if provider not in ["qwen", "doubao"]:
+        return JSONResponse(
+            content={"error": "Invalid provider. Must be 'qwen' or 'doubao'"},
+            status_code=400
+        )
+    
+    # 检查对应的API密钥是否配置
+    if provider == "qwen" and not api_key:
+        return JSONResponse(
+            content={"error": "通义千问 API Key 未配置"},
+            status_code=400
+        )
+    
+    if provider == "doubao" and not doubao_api_key:
+        return JSONResponse(
+            content={"error": "豆包 API Key 未配置"},
+            status_code=400
+        )
+    
+    with current_api_provider_lock:
+        current_api_provider = provider
+    
+    provider_name = "通义千问" if provider == "qwen" else "豆包"
+    print(f"API提供商已切换为: {provider_name}")
+    
+    return JSONResponse(content={
+        "message": f"API提供商已切换为 {provider_name}",
+        "provider": provider
+    })
 
 @app.get("/app_info")
 async def get_app_info():

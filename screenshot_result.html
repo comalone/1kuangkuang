@@ -225,6 +225,54 @@
             font-weight: bold;
             pointer-events: none;
         }
+
+        .api-switcher {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            z-index: 1001;
+            display: flex;
+            gap: 10px;
+            align-items: center;
+        }
+
+        .api-button {
+            padding: 10px 20px;
+            border: 2px solid rgba(255, 255, 255, 0.3);
+            border-radius: 8px;
+            background: rgba(0, 0, 0, 0.5);
+            color: #fff;
+            font-size: 0.9em;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            backdrop-filter: blur(10px);
+        }
+
+        .api-button:hover {
+            background: rgba(102, 126, 234, 0.8);
+            border-color: rgba(102, 126, 234, 1);
+            transform: translateY(-2px);
+        }
+
+        .api-button.active {
+            background: rgba(102, 126, 234, 1);
+            border-color: rgba(102, 126, 234, 1);
+            font-weight: bold;
+        }
+
+        .api-button:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+
+        .api-status {
+            color: #fff;
+            font-size: 0.85em;
+            background: rgba(0, 0, 0, 0.5);
+            padding: 8px 15px;
+            border-radius: 6px;
+            backdrop-filter: blur(10px);
+        }
     </style>
 </head>
 
@@ -252,6 +300,12 @@
     <div class="mini-video-container">
         <img id="miniVideoFeed" src="/video_feed" alt="实时画面">
         <div class="mini-video-hint">👌 OK手势返回拍摄</div>
+    </div>
+
+    <div class="api-switcher">
+        <div class="api-status" id="apiStatus">API: 加载中...</div>
+        <button class="api-button" id="qwenButton" onclick="switchAPI('qwen')">通义千问</button>
+        <button class="api-button" id="doubaoButton" onclick="switchAPI('doubao')">豆包</button>
     </div>
 
     <script>
@@ -408,10 +462,73 @@
             requestAnimationFrame(animateMiniVideo);
         }
 
+        // API切换功能
+        async function loadAPIProvider() {
+            try {
+                const response = await fetch('/get_api_provider');
+                const data = await response.json();
+
+                const qwenBtn = document.getElementById('qwenButton');
+                const doubaoBtn = document.getElementById('doubaoButton');
+                const statusDiv = document.getElementById('apiStatus');
+
+                // 更新按钮状态
+                qwenBtn.classList.toggle('active', data.provider === 'qwen');
+                doubaoBtn.classList.toggle('active', data.provider === 'doubao');
+
+                // 禁用未配置的API
+                qwenBtn.disabled = !data.qwen_configured;
+                doubaoBtn.disabled = !data.doubao_configured;
+
+                // 更新状态显示
+                const providerName = data.provider === 'qwen' ? '通义千问' : '豆包';
+                statusDiv.textContent = `当前API: ${providerName}`;
+
+            } catch (error) {
+                console.error('加载API提供商失败:', error);
+            }
+        }
+
+        async function switchAPI(provider) {
+            try {
+                const response = await fetch('/set_api_provider', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ provider: provider })
+                });
+
+                const data = await response.json();
+
+                if (response.ok) {
+                    console.log(data.message);
+                    loadAPIProvider(); // 重新加载状态
+
+                    // 显示切换成功提示
+                    const statusDiv = document.getElementById('apiStatus');
+                    const originalText = statusDiv.textContent;
+                    statusDiv.textContent = '✓ ' + data.message;
+                    statusDiv.style.background = 'rgba(40, 167, 69, 0.8)';
+
+                    setTimeout(() => {
+                        statusDiv.textContent = originalText;
+                        statusDiv.style.background = 'rgba(0, 0, 0, 0.5)';
+                    }, 2000);
+                } else {
+                    alert(data.error || 'API切换失败');
+                }
+            } catch (error) {
+                console.error('切换API失败:', error);
+                alert('切换API失败,请重试');
+            }
+        }
+
         // 页面加载时自动执行初始化
         window.onload = () => {
             loadScreenshot();
             animateMiniVideo();
+            loadAPIProvider(); // 加载API提供商状态
             setInterval(checkGestureForReset, 1000); // 每秒检查一次手势
         };
     </script>

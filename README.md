@@ -1,6 +1,6 @@
 # 手势识别截图与 AI 智能分析系统
 
-这是一个基于 **MediaPipe** 和 **FastAPI** 开发的智能交互系统。它允许用户通过手势在视频流中框选特定区域进行截图，并自动调用 **阿里云 DashScope (Qwen-VL)** 大模型对截图内容进行深度分析。
+这是一个基于 **MediaPipe** 和 **FastAPI** 开发的智能交互系统。它允许用户通过手势在视频流中框选特定区域进行截图，并自动调用 **阿里云通义千问 (Qwen-VL)** 或 **字节跳动豆包 (Doubao Vision)** 大模型对截图内容进行深度分析。
 
 ## 🌟 核心功能
 
@@ -9,7 +9,8 @@
     -   保持静止 1 秒设定起始点。
     -   移动食指划定矩形区域。
     -   再次保持静止 1 秒自动执行截图。
--   **AI 智能分析**: 截图完成后自动上传至云端，利用 `qwen-vl-plus` 模型分析图片内容并实时返回结果。
+-   **AI 智能分析**: 截图完成后自动上传至云端，支持使用 `通义千问` 或 `豆包` 模型分析图片内容并实时返回结果。
+-   **双 AI 引擎**: 支持在线切换阿里云通义千问和字节跳动豆包两种 AI 模型。
 -   **无感交互**: 在结果页面比划 "OK" 手势即可自动重置状态并返回拍摄界面，无需鼠标操作。
 -   **多摄像头支持**: 支持 ESP32-CAM 远程推流或本地 USB 摄像头切换。
 -   **实时反馈**: 结果页面提供左下角实时小窗预览，确保交互连贯性。
@@ -19,7 +20,9 @@
 
 -   **后端**: FastAPI (Python 3.8+)
 -   **视觉处理**: OpenCV, MediaPipe (Lite 模型优化)
--   **AI 能力**: 阿里云 DashScope SDK (Qwen-VL)
+-   **AI 能力**: 
+    -   阿里云 DashScope SDK (Qwen-VL)
+    -   字节跳动豆包视觉 API (Doubao Vision)
 -   **前端**: 原生 HTML5 / JavaScript (支持异步轮询与状态机同步)
 
 ## 🚀 快速开始
@@ -30,7 +33,21 @@ pip install fastapi uvicorn opencv-python mediapipe numpy requests dashscope
 ```
 
 ### 2. 配置 API Key
-在环境变量中填入您的阿里云 DASHSCOPE_API_KEY
+在环境变量中配置您的 AI API 密钥：
+
+**通义千问** (阿里云):
+```bash
+set DASHSCOPE_API_KEY=your-qwen-api-key
+```
+
+**豆包** (字节跳动):
+```bash
+set DOUBAO_API_KEY=your-doubao-api-key
+set DOUBAO_API_URL=https://ark.cn-beijing.volces.com/api/v3/chat/completions
+set DOUBAO_MODEL=doubao-vision-pro-32k-2410128
+```
+
+详细配置请参考 `豆包API使用说明.md`
 
 
 ### 3. 运行服务
@@ -64,12 +81,14 @@ python service.py
 ## 📂 项目结构
 
 ```text
-├── service.py       # FastAPI 后端逻辑、手势识别与 AI 调用
-├── screenshot.html      # 主拍摄界面
-├── screenshot_result.html # 结果展示与 AI 分析界面
-├── prompts.json         # AI 提示词配置文件
-├── uploads/             # 截图文件存储目录
-└── README.md            # 项目说明文档
+├── service.py                # FastAPI 后端逻辑、手势识别与 AI 调用
+├── screenshot.html           # 主拍摄界面
+├── screenshot_result.html    # 结果展示与 AI 分析界面
+├── prompts.json              # AI 提示词配置文件
+├── test_doubao_api.py        # 豆包 API 测试脚本
+├── 豆包API使用说明.md      # 豆包 API 配置文档
+├── uploads/                  # 截图文件存储目录
+└── README.md                 # 项目说明文档
 ```
 
 
