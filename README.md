@@ -1,35 +1,42 @@
-# 手势识别截图与 AI 智能分析系统
+# 一框框系统 (1kuangkuang)
 
-这是一个基于 **MediaPipe** 和 **FastAPI** 开发的智能交互系统。它允许用户通过手势在视频流中框选特定区域进行截图，并自动调用 **阿里云通义千问 (Qwen-VL)** 或 **字节跳动豆包 (Doubao Vision)** 大模型对截图内容进行深度分析。
+**手势驱动的 AI 视觉助手 | Gesture-Driven AI Vision Assistant**
 
-## 🌟 核心功能
+这是一个基于 **MediaPipe** 和 **FastAPI** 开发的智能交互系统。它允许用户通过自然手势在视频流中框选区域，并自动调用 **阿里云通义千问 (Qwen-VL)** 或 **字节跳动豆包 (Doubao Vision)** 大模型对截图内容进行深度分析。
 
--   **手势框选截图**: 
-    -   使用食指指向（Pointer）触发检测。
-    -   保持静止 1 秒设定起始点。
-    -   移动食指划定矩形区域。
-    -   再次保持静止 1 秒自动执行截图。
--   **AI 智能分析**: 截图完成后自动上传至云端，支持使用 `通义千问` 或 `豆包` 模型分析图片内容并实时返回结果。
--   **双 AI 引擎**: 支持在线切换阿里云通义千问和字节跳动豆包两种 AI 模型。
--   **无感交互**: 在结果页面比划 "OK" 手势即可自动重置状态并返回拍摄界面，无需鼠标操作。
--   **多摄像头支持**: 支持 ESP32-CAM 远程推流或本地 USB 摄像头切换。
--   **实时反馈**: 结果页面提供左下角实时小窗预览，确保交互连贯性。
--   **多模式切换**: 支持通过 `prompts.json` 配置多种 AI 分析角色（如解题助手、爆文创作、剧本扩写等）。
+系统采用单页应用 (SPA) 架构，提供无缝的交互体验，支持实时手势识别、智能截图、AI 分析和语音/视觉反馈。
 
-## 🛠️ 技术栈
+## ✨ 核心功能
 
--   **后端**: FastAPI (Python 3.8+)
--   **视觉处理**: OpenCV, MediaPipe (Lite 模型优化)
--   **AI 能力**: 
+-   **👆 手势框选截图**:
+    -   **指指点点**: 食指作为指针触发检测。
+    -   **静止锁定**: 悬停 1 秒锁定起始点。
+    -   **拉框截图**: 移动手指绘制矩形，再次悬停 1 秒完成截图。
+-   **🧠 双 AI 引擎切换**:
+    -   内置 **通义千问 (Qwen-VL)** 和 **豆包 (Doubao Vision)** 支持。
+    -   支持在界面设置中实时切换 AI 模型和版本。
+-   **⚡ 单页无缝体验**:
+    -   拍摄与分析界面平滑过渡，无需页面跳转。
+    -   **OK 手势**: 在分析结果页比划 "OK" (食指拇指捏合) 即可一键返回拍摄模式。
+-   **⚙️ 实时配置**:
+    -   支持画面旋转 (90°/180°/270°) 和镜像翻转。
+    -   内置多种 AI 角色提示词 (解题、润色、创作等)。
+-   **📹 灵活采集**: 支持 USB 摄像头及 ESP32-CAM 等网络流。
+
+## �️ 技术栈
+
+-   **后端**: Python 3.8+, FastAPI, Uvicorn
+-   **视觉处理**: OpenCV, MediaPipe (Lite 模型优化), NumPy
+-   **AI 服务**: 
     -   阿里云 DashScope SDK (Qwen-VL)
     -   字节跳动豆包视觉 API (Doubao Vision)
--   **前端**: 原生 HTML5 / JavaScript (支持异步轮询与状态机同步)
+-   **前端**: HTML5, CSS3, JavaScript (原生 SPA 架构, WebSocket 通信)
 
 ## 🚀 快速开始
 
 ### 1. 安装依赖
 ```bash
-pip install fastapi uvicorn opencv-python mediapipe numpy requests dashscope
+pip install fastapi uvicorn opencv-python mediapipe numpy requests dashscope python-dotenv
 ```
 
 ### 2. 配置 API Key
@@ -46,9 +53,6 @@ set DOUBAO_API_KEY=your-doubao-api-key
 set DOUBAO_API_URL=https://ark.cn-beijing.volces.com/api/v3/chat/completions
 set DOUBAO_MODEL=doubao-vision-pro-32k-2410128
 ```
-
-详细配置请参考 `豆包API使用说明.md`
-
 
 ### 3. 运行服务
 ```bash
@@ -82,7 +86,7 @@ python service.py
 
 ```text
 ├── service.py                # FastAPI 后端逻辑、手势识别与 AI 调用
-├── screenshot.html           # 主拍摄界面
+├── index.html           # 主拍摄界面
 ├── screenshot_result.html    # 结果展示与 AI 分析界面
 ├── prompts.json              # AI 提示词配置文件
 ├── test_doubao_api.py        # 豆包 API 测试脚本

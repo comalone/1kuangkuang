@@ -14,6 +14,7 @@ import asyncio
 import cv2 as cv
 import numpy as np
 import mediapipe as mp
+import math
 import time
 from collections import deque, Counter
 import threading
@@ -79,7 +80,7 @@ PROMPTS_FILE = "prompts.json"
 
 # 应用元数据配置
 APP_NAME = "一框框系统 © 2026"
-APP_VERSION = "1.2.0"
+APP_VERSION = "1.3.3"
 APP_COPYRIGHT = "作者:禾禾椰"
 PROJECT_URL = "https://www.douyin.com/user/MS4wLjABAAAAOyqvejBV5f3GmXNbmeCmkCRQJ84Lcluy1uMeWwKa7o0"
 
@@ -314,15 +315,12 @@ def apply_transforms(frame):
 
 def calculate_angle(a, b, c):
     """计算三个点形成的夹角 (0-180度)"""
-    a = np.array(a)  # First
-    b = np.array(b)  # Mid
-    c = np.array(c)  # End
-    
-    radians = np.arctan2(c[1]-b[1], c[0]-b[0]) - np.arctan2(a[1]-b[1], a[0]-b[0])
-    angle = np.abs(radians*180.0/np.pi)
+    # 优化: 使用 math 库替代 numpy，避免频繁创建数组的开销
+    radians = math.atan2(c[1]-b[1], c[0]-b[0]) - math.atan2(a[1]-b[1], a[0]-b[0])
+    angle = abs(radians * 180.0 / math.pi)
     
     if angle > 180.0:
-        angle = 360-angle
+        angle = 360 - angle
         
     return angle
 
@@ -445,47 +443,22 @@ def capture_screenshot(image, pt1, pt2):
     
     cropped = image[y1:y2, x1:x2]
     
-    # 再次检查裁剪后的图像
-    if cropped is None or cropped.size == 0:
-        print("警告: 裁剪后的图像为空")
-        return None
     
     timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
     filename = f"screenshot_{timestamp}.jpg"
     filepath = os.path.join(UPLOAD_DIR, filename)
-    cv.imwrite(filepath, cropped)
-    last_screenshot_path = filepath
     
-    print(f"截图已保存: {filename}")
-    return cropped
-
-def draw_landmarks(image, landmark_point):
-    """在图像上绘制手部关键点和骨架"""
-    if len(landmark_point) > 0:
-        connections = [
-            (2, 3), (3, 4), (5, 6), (6, 7), (7, 8),
-            (9, 10), (10, 11), (11, 12), (13, 14), (14, 15),
-            (15, 16), (17, 18), (18, 19), (19, 20),
-            (0, 1), (1, 2), (2, 5), (5, 9), (9, 13), (13, 17), (17, 0)
-        ]
-        
-        img_width, img_height = image.shape[1], image.shape[0]
-        points = []
-        for lp in landmark_point:
-            points.append((int(lp[0] * img_width), int(lp[1] * img_height)))
-
-        # 绘制骨架连线
-        for start_idx, end_idx in connections:
-            cv.line(image, points[start_idx], points[end_idx], (0, 0, 0), 6)
-            cv.line(image, points[start_idx], points[end_idx], (255, 255, 255), 2)
-
-        # 绘制关键点
-        for i, pt in enumerate(points):
-            size = 8 if i in [4, 8, 12, 16, 20] else 5
-            cv.circle(image, pt, size, (255, 255, 255), -1)
-            cv.circle(image, pt, size, (0, 0, 0), 1)
-
-    return image
+    try:
+        if cv.imwrite(filepath, cropped):
+            last_screenshot_path = filepath
+            print(f"截图已保存: {filename}")
+            return cropped
+        else:
+            print(f"错误: 无法保存截图到 {filepath}")
+            return None
+    except Exception as e:
+        print(f"错误: 保存截图时发生异常: {e}")
+        return None
 
 def classify_gesture(image: np.ndarray):
     """检测手部并提取食指位置"""
@@ -504,6 +477,7 @@ def classify_gesture(image: np.ndarray):
 
     raw_gesture_id = -1
     index_finger_pos = None
+    img_height, img_width = image.shape[:2]
     
     if results.multi_hand_landmarks:
         for hand_landmarks in results.multi_hand_landmarks:
@@ -512,7 +486,6 @@ def classify_gesture(image: np.ndarray):
                 landmarks.append([landmark.x, landmark.y])
             
             # 计算各手指弯曲角度
-            angle_thumb = calculate_angle(landmarks[2], landmarks[3], landmarks[4])
             angle_index = calculate_angle(landmarks[5], landmarks[6], landmarks[7])
             angle_middle = calculate_angle(landmarks[9], landmarks[10], landmarks[11])
             angle_ring = calculate_angle(landmarks[13], landmarks[14], landmarks[15])
@@ -525,7 +498,6 @@ def classify_gesture(image: np.ndarray):
             is_pinky_open = angle_pinky > 150
             
             # 获取食指尖端位置
-            img_width, img_height = image.shape[1], image.shape[0]
             index_finger_pos = [
                 int(landmarks[8][0] * img_width),
                 int(landmarks[8][1] * img_height)
@@ -533,9 +505,7 @@ def classify_gesture(image: np.ndarray):
 
             # 1. Pointer (指指点点)
             if is_index_open and (not is_middle_open) and (not is_ring_open) and (not is_pinky_open):
-                # 额外校验: 指尖方向向上
-                if landmarks[8][1] < landmarks[6][1]: 
-                     raw_gesture_id = 2
+                raw_gesture_id = 2
             break
     
     # === 时序滤波 ===
@@ -551,7 +521,6 @@ def classify_gesture(image: np.ndarray):
     
     # 绘制
     if results.multi_hand_landmarks:
-        img_width, img_height = image.shape[1], image.shape[0]
         key_points = [4, 8, 12, 16, 20]
         color = (0, 255, 255) if stable_gesture_id == 2 else (0, 255, 0)
 
@@ -594,12 +563,23 @@ def capture_thread():
     cap.set(cv.CAP_PROP_FPS, 30)
     print("USB摄像头已打开 (采集线程)")
 
+    fail_count = 0
     while camera_running:
         ret, frame = cap.read()
         if not ret:
+            fail_count += 1
+            if fail_count > 50: # 连续失败约0.5秒以上
+                print("警告: 摄像头读取连续失败, 尝试重置...")
+                cap.release()
+                time.sleep(1)
+                cap = cv.VideoCapture(0, cv.CAP_DSHOW)
+                if not cap.isOpened():
+                    cap = cv.VideoCapture(0)
+                fail_count = 0
             time.sleep(0.01)
             continue
         
+        fail_count = 0
         # 应用变换
         frame = apply_transforms(frame)
         
@@ -754,12 +734,12 @@ app = FastAPI(lifespan=lifespan)
 @app.get("/")
 async def root():
     """根路由,重定向到截图页面"""
-    return FileResponse("screenshot.html")
+    return FileResponse("index.html")
 
-@app.get("/screenshot.html")
+@app.get("/index.html")
 async def screenshot_page():
     """单页应用 - 截图和AI分析"""
-    return FileResponse("screenshot.html")
+    return FileResponse("index.html")
 
 @app.websocket("/ws/video")
 async def websocket_video_stream(websocket: WebSocket):
@@ -778,8 +758,6 @@ async def websocket_video_stream(websocket: WebSocket):
             if current_state == STATE_CAPTURED and last_sent_state != STATE_CAPTURED:
                 await websocket.send_text("CAPTURED")
                 last_sent_state = STATE_CAPTURED
-            elif current_state == STATE_IDLE:
-                last_sent_state = STATE_IDLE
 
             # 2. 发送视频帧
             current_frame = None

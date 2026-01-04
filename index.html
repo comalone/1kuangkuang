@@ -446,9 +446,21 @@
                     <button class="btn-close-settings" onclick="toggleSettings()" title="关闭">✕</button>
                 </div>
 
+                <!-- AI模型设置 -->
+                <div class="settings-section">
+                    <div class="settings-section-title">🤖 AI模型选择</div>
+                    <div class="settings-grid">
+                        <button class="menu-item" id="qwenButton" onclick="switchAPI('qwen')">
+                            <span>通义千问</span>
+                        </button>
+                        <button class="menu-item" id="doubaoButton" onclick="switchAPI('doubao')">
+                            <span>豆包</span>
+                        </button>
+                    </div>
+                </div>
                 <!-- 画面设置 -->
                 <div class="settings-section">
-                    <div class="settings-section-title">📹 画面设置</div>
+                    <div class="settings-section-title">📹 视频画面设置</div>
                     <div class="settings-grid">
                         <button class="menu-item" onclick="toggleRotate()">
                             <span class="menu-item-icon">🔄</span>
@@ -461,20 +473,6 @@
                     </div>
                 </div>
 
-                <!-- AI模型设置 -->
-                <div class="settings-section">
-                    <div class="settings-section-title">🤖 AI模型</div>
-                    <div class="settings-grid">
-                        <button class="menu-item" id="qwenButton" onclick="switchAPI('qwen')">
-                            <span class="menu-item-icon">🌌</span>
-                            <span>通义千问</span>
-                        </button>
-                        <button class="menu-item" id="doubaoButton" onclick="switchAPI('doubao')">
-                            <span class="menu-item-icon">🥣</span>
-                            <span>豆包</span>
-                        </button>
-                    </div>
-                </div>
 
                 <!-- 应用信息 -->
                 <div class="app-info-section">
