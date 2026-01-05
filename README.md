@@ -40,19 +40,8 @@ pip install fastapi uvicorn opencv-python mediapipe numpy requests dashscope pyt
 ```
 
 ### 2. 配置 API Key
-在环境变量中配置您的 AI API 密钥：
+在环境变量中配置您的 AI API 密钥
 
-**通义千问** (阿里云):
-```bash
-set DASHSCOPE_API_KEY=your-qwen-api-key
-```
-
-**豆包** (字节跳动):
-```bash
-set DOUBAO_API_KEY=your-doubao-api-key
-set DOUBAO_API_URL=https://ark.cn-beijing.volces.com/api/v3/chat/completions
-set DOUBAO_MODEL=doubao-vision-pro-32k-2410128
-```
 
 ### 3. 运行服务
 ```bash
@@ -81,19 +70,6 @@ python service.py
 -   **🛡️ 内容审核**: 检查图片内容的合规性与逻辑错误。
 -   **🎓 论文精修**: 优化学术论文片段的表达与逻辑。
 -   **🎭 剧本扩写**: 根据画面扩写电影级剧本情节。
-
-## 📂 项目结构
-
-```text
-├── service.py                # FastAPI 后端逻辑、手势识别与 AI 调用
-├── index.html           # 主拍摄界面
-├── screenshot_result.html    # 结果展示与 AI 分析界面
-├── prompts.json              # AI 提示词配置文件
-├── test_doubao_api.py        # 豆包 API 测试脚本
-├── 豆包API使用说明.md      # 豆包 API 配置文档
-├── uploads/                  # 截图文件存储目录
-└── README.md                 # 项目说明文档
-```
 
 
 ## 📄 许可证

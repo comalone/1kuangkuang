@@ -17,11 +17,10 @@ for /f "tokens=1,2" %%a in ('python --version 2^>^&1') do (
     echo [INFO] 检测到 %%a %%b
 )
 
-echo [INFO] 检查环境变量 DASHSCOPE_API_KEY...
-if "%DASHSCOPE_API_KEY%"=="" (
-    echo [ERROR] 环境变量 DASHSCOPE_API_KEY 未设置，请先配置。
-    pause
-    exit /b 1
+echo [INFO] 检查 API 密钥环境变量...
+if "%DASHSCOPE_API_KEY%"=="" if "%DOUBAO_API_KEY%"=="" (
+    echo [WARNING] 环境变量 DASHSCOPE_API_KEY 和 DOUBAO_API_KEY 均未设置。
+    echo [WARNING] 请至少配置一个 API 密钥以使用服务。
 )
 
 echo [INFO] 检查端口 8000 是否被占用...
