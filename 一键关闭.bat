@@ -1,4 +1,5 @@
 @echo off
+chcp 65001 >nul
 SETLOCAL
 echo [INFO] 正在停止运行在 8000 端口的服务...
 
