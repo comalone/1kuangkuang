@@ -467,13 +467,9 @@ def classify_gesture(image: np.ndarray):
     # 转换为RGB用于MediaPipe处理
     image_rgb = cv.cvtColor(image, cv.COLOR_BGR2RGB)
 
-    # 性能优化:缩放图像进行 AI 推理 (320x180 更快)
-    h, w = image_rgb.shape[:2]
-    scale_width = 320
-    image_small = cv.resize(image_rgb, (scale_width, int(h * (scale_width / w))), interpolation=cv.INTER_LINEAR)
-    image_small.flags.writeable = False
+    image_rgb.flags.writeable = False
 
-    results = hands.process(image_small)
+    results = hands.process(image_rgb)
 
     raw_gesture_id = -1
     index_finger_pos = None
@@ -684,8 +680,8 @@ async def lifespan(app: FastAPI):
     hands = mp_hands.Hands(
         static_image_mode=False,
         max_num_hands=1,
-        min_detection_confidence=0.7,   # 提高检测阈值
-        min_tracking_confidence=0.6,    # 提高跟踪阈值
+        min_detection_confidence=0.5,   # 检测阈值以提高识别率
+        min_tracking_confidence=0.5,    # 跟踪阈值
         model_complexity=1              # 提高模型复杂度 (0->1)
     )
     print("MediaPipe模型加载成功")
